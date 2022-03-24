@@ -1,0 +1,98 @@
+#!/usr/bin/env node
+const inquirer = require("inquirer");
+const { exec } = require("child_process");
+
+async function main() {
+	try {
+		const ans = await inquirer.prompt([
+			{
+				type: "list",
+				name: "type",
+				message: "Type?",
+				choices: ["bugfix", "feature"],
+			},
+			{
+				type: "input",
+				name: "mgm",
+				message: "Ticket ID?",
+			},
+			{
+				type: "input",
+				name: "label",
+				message: "Branch name?",
+			},
+		]);
+		const { type, mgm, label } = ans;
+
+		let cleanLabel = chain(label)
+			.map(removeTokoClient)
+			.map(removeUmlaute)
+			.map(replaceWhitespace)
+			.map(replaceSpecialChars)
+			.map(snakeCase)
+			.map(removeSpecialCharsAtStart)
+			.map(removeSpecialCharsAtEnd)
+			.map((l) => `TOKO-Client_${l}`)
+			.get();
+
+		const branch = `${type}/${mgm}-${cleanLabel}`;
+
+		exec(`git checkout -b ${branch} develop`, (err, stdout, stderr) => {
+			if (err) {
+				console.error(stderr);
+			}
+			console.log(stdout);
+		});
+	} catch (e) {
+		console.log(e);
+	}
+}
+
+main();
+
+function chain(value) {
+	function map(fn) {
+		return chain(fn(value));
+	}
+
+	function get() {
+		return value;
+	}
+
+	return { map, get };
+}
+
+function snakeCase(str) {
+	return str.replace(/([a-z])([A-Z])/g, "$1_$2");
+}
+
+function replaceWhitespace(str) {
+	return str.replace(/\s+/g, "_");
+}
+
+function replaceSpecialChars(str) {
+	return str.replace(/[^a-zA-Z0-9-_]/g, "");
+}
+
+function removeSpecialCharsAtStart(str) {
+	return str.replace(/^[-_]/, "");
+}
+
+function removeSpecialCharsAtEnd(str) {
+	return str.replace(/[-_]$/, "");
+}
+
+function removeUmlaute(str) {
+	return str.replace(/[äöüß]/g, function (match) {
+		return {
+			ä: "ae",
+			ö: "oe",
+			ü: "ue",
+			ß: "ss",
+		}[match];
+	});
+}
+
+function removeTokoClient(str) {
+	return str.replace(/^TOKO-Client/gi, "");
+}
